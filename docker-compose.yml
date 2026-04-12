@@ -1,0 +1,56 @@
+services:
+
+  spark-master:
+    image: apache/spark:4.1.0
+    container_name: spark-master
+    entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - .:/opt/pipeline
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  spark-worker:
+    image: apache/spark:4.1.0
+    container_name: spark-worker
+    entrypoint:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+    environment:
+      SPARK_WORKER_MEMORY: 4g
+      SPARK_WORKER_CORES: 2
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/opt/pipeline
+    depends_on:
+      spark-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pipeline:
+    image: apache/spark:4.1.0
+    container_name: pipeline-runner
+    working_dir: /opt/pipeline
+    entrypoint:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - spark://spark-master:7077
+      - --deploy-mode
+      - client
+      - main.py
+    volumes:
+      - .:/opt/pipeline
+    depends_on:
+      spark-worker:
+        condition: service_healthy
