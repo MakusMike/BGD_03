@@ -19,11 +19,9 @@ class Settings:
         default_factory=lambda: str(PROJECT_ROOT / "data" / "gold")
     )
 
-    # Spark tuning
     spark_shuffle_partitions: int = 8
     spark_app_name: str = "ddos_pipeline"
 
-    # Column names — matched to actual dataset
     label_column: str = "Label"
     label_attack: str = "ddos"
     label_benign: str = "Benign"
@@ -33,7 +31,6 @@ class Settings:
     bwd_pkts_column: str = "Tot Bwd Pkts"
     flow_duration_column: str = "Flow Duration"
 
-    # Columns to drop on ingest (pandas index artifact + composite key not useful for analysis)
     drop_columns: tuple = ("Unnamed: 0", "Flow ID")
 
     inf_prone_dtypes: tuple = ("float", "double")
