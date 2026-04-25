@@ -1,49 +1,47 @@
 # DDoS Pipeline
 
-Rozproszony pipeline do przetwarzania danych sieciowych zbudowany na Apache Spark,
-wykrywający wzorce ataków DDoS w ruchu sieciowym.
+A distributed data processing pipeline built on Apache Spark that detects DDoS attack patterns in network traffic data.
 
-Pipeline następuje architekturze **medallion** (Bronze → Silver → Gold)
-i jest orkiestrowany przez **Prefect** z automatycznym harmonogramem.
+The pipeline follows a **medallion architecture** (Bronze → Silver → Gold) and is fully orchestrated by **Prefect** with an automated schedule.
 
 ---
 
-## Architektura
+## Architecture
 
 ![Pipeline Architecture](architecture.png)
 
 ```
-Źródło CSV  →  Bronze (JSON)  →  Silver (czyszczenie)  →  Gold (agregacje)
-                                                               ↑
-                                                         Prefect flow
-                                                      (schedule: cron 2:00)
+Source CSV  →  Bronze (JSON)  →  Silver (cleaning)  →  Gold (aggregations)
+                                                              ↑
+                                                        Prefect flow
+                                                     (schedule: cron 2:00)
 ```
 
 ---
 
-## Struktura projektu
+## Project Structure
 
 ```
 BGD_03/
 ├── schedule/
-│   └── ddos_dag.py           # Prefect flow - główny punkt wejścia orkiestratora
+│   └── ddos_dag.py           # Prefect flow - main orchestrator entry point
 ├── pipeline/
-│   ├── main.py               # Bezpośrednie uruchomienie bez orkiestratora
+│   ├── main.py               # Direct run without orchestrator
 │   ├── ingest.py             # Bronze: CSV → JSON
-│   ├── transform.py          # Silver: czyszczenie i deduplikacja
-│   ├── aggregate.py          # Gold: tabele analityczne
-│   └── settings.py           # Cała konfiguracja w jednym miejscu
+│   ├── transform.py          # Silver: cleaning and deduplication
+│   ├── aggregate.py          # Gold: analytical aggregations
+│   └── settings.py           # All configuration in one place
 ├── sources/
-│   ├── source_config.yml     # Parametry źródła danych
-│   └── schema.md             # Opis schematu i warstw przetwarzania
+│   ├── source_config.yml     # Data source parameters
+│   └── schema.md             # Schema description and layer overview
 ├── tech/
 │   └── docker-compose.yml    # Spark cluster + Prefect server + pipeline runner
 ├── data/
 │   ├── raw/
-│   │   └── dataset.csv       # Plik wejściowy (nie commitowany do Git)
-│   ├── bronze/               # Surowe dane w formacie JSON
-│   ├── silver/               # Dane po czyszczeniu
-│   └── gold/                 # Tabele wynikowe
+│   │   └── dataset.csv       # Input file (not committed to Git)
+│   ├── bronze/               # Raw data in JSON format
+│   ├── silver/               # Cleaned data in JSON format
+│   └── gold/                 # Output tables
 │       ├── top_source_ips/
 │       ├── traffic_by_label/
 │       ├── attack_rate_by_port/
@@ -55,78 +53,78 @@ BGD_03/
 
 ---
 
-## Wymagania
+## Requirements
 
 - Docker + Docker Compose
-- Plik datasetu CSV umieszczony w `data/raw/dataset.csv`
-- Dataset do pobrania: https://www.kaggle.com/datasets/devendra416/ddos-datasets
+- Dataset CSV placed at `data/raw/dataset.csv`
+- Download dataset from: https://www.kaggle.com/datasets/devendra416/ddos-datasets
 
 ---
 
-## Uruchomienie
+## How to Run
 
-### Poprzez Prefect orkiestrator
+### Via Prefect orchestrator
 
 ```bash
 docker compose -f tech/docker-compose.yml up
 ```
 
-Uruchamia:
-1. **Prefect server** - UI dostępne pod `http://localhost:4200`
-2. **Spark master** - UI pod `http://localhost:8080`
-3. **Spark worker** - czeka na zdrowy master
-4. **Pipeline runner** - wykonuje `schedule/ddos_dag.py`, czeka na oba powyższe
+This starts:
+1. **Prefect server** - UI available at `http://localhost:4200`
+2. **Spark master** - UI available at `http://localhost:8080`
+3. **Spark worker** - waits for a healthy master
+4. **Pipeline runner** - executes `schedule/ddos_dag.py`, waits for both above
 
-Prefect automatycznie uruchamia pipeline codziennie o 2:00 (CronSchedule).
-Historia runów, logi i statusy są widoczne w Prefect UI.
+Prefect automatically runs the pipeline every day at 2:00 AM (CronSchedule).
+Run history, logs and task statuses are visible in the Prefect UI.
 
-### Bezpośrednio bez orkiestratora
+### Directly without orchestrator
 
 ```bash
 cd pipeline
 python main.py
 ```
 
-Pipeline jest **idempotentny** - bezpieczne wielokrotne uruchamianie, poprzednie wyniki są nadpisywane.
+The pipeline is **idempotent** - safe to re-run at any time, previous outputs are overwritten.
 
 ---
 
-## Warstwy przetwarzania
+## Processing Layers
 
-| Warstwa | Plik | Opis |
-|---------|------|------|
-| Bronze | `ingest.py` | Wczytanie CSV, usunięcie zbędnych kolumn (`Unnamed: 0`, `Flow ID`), zapis do JSON |
-| Silver | `transform.py` | Zamiana `±Infinity` na `null`, imputacja średnią kolumny, deduplikacja |
-| Gold | `aggregate.py` | 4 tabele analityczne (patrz niżej) |
+| Layer | File | Description |
+|-------|------|-------------|
+| Bronze | `ingest.py` | Read CSV, drop unused columns (`Unnamed: 0`, `Flow ID`), write to JSON |
+| Silver | `transform.py` | Replace `±Infinity` with `null`, impute column means, deduplicate |
+| Gold | `aggregate.py` | 4 analytical tables (see below) |
 
-### Tabele Gold
+### Gold Layer Output Tables
 
-| Tabela | Opis |
-|--------|------|
-| `top_source_ips` | Top 20 adresów IP źródłowych według liczby przepływów ataku |
-| `traffic_by_label` | Liczba przepływów i pakietów dla każdej klasy (ddos / Benign) |
-| `attack_rate_by_port` | Top 20 portów docelowych według wskaźnika ataków |
-| `flow_duration_stats` | Średni, minimalny i maksymalny czas trwania przepływu per klasa |
-
----
-
-## Konfiguracja
-
-Wszystkie ustawienia w `pipeline/settings.py`. Parametry źródła danych opisane w `sources/source_config.yml`.
-
-| Parametr | Domyślnie | Opis |
-|----------|-----------|------|
-| `input_file` | `data/raw/dataset.csv` | Ścieżka do pliku CSV |
-| `label_attack` | `ddos` | Wartość etykiety ataku w datasecie |
-| `label_benign` | `Benign` | Wartość etykiety ruchu normalnego |
-| `spark_shuffle_partitions` | `8` | Dostosuj do rozmiaru danych i liczby rdzeni |
-| `spark_app_name` | `ddos_pipeline` | Nazwa aplikacji Spark (widoczna w UI) |
+| Table | Description |
+|-------|-------------|
+| `top_source_ips` | Top 20 source IPs by attack flow count |
+| `traffic_by_label` | Flow count and packet totals per label (ddos / Benign) |
+| `attack_rate_by_port` | Top 20 destination ports by attack-flow rate |
+| `flow_duration_stats` | Mean, min and max flow duration per label |
 
 ---
 
-## Orkiestracja (Prefect)
+## Configuration
 
-`schedule/ddos_dag.py` definiuje flow Prefect składający się z trzech tasków:
+All settings are in `pipeline/settings.py`. Data source parameters are described in `sources/source_config.yml`.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `input_file` | `data/raw/dataset.csv` | Path to source CSV |
+| `label_attack` | `ddos` | Attack label value in the dataset |
+| `label_benign` | `Benign` | Benign label value in the dataset |
+| `spark_shuffle_partitions` | `8` | Tune based on dataset size and available cores |
+| `spark_app_name` | `ddos_pipeline` | Spark application name (visible in Spark UI) |
+
+---
+
+## Orchestration (Prefect)
+
+`schedule/ddos_dag.py` defines a Prefect flow consisting of three sequential tasks:
 
 ```
 ddos_pipeline_flow
@@ -135,5 +133,5 @@ ddos_pipeline_flow
 └── task_aggregate   (Gold,   retries=2)
 ```
 
-Każdy task ma skonfigurowane 2 retry z 30-sekundowym opóźnieniem.
-Flow jest zarejestrowany z harmonogramem `CronSchedule(cron="0 2 * * *")`.
+Each task is configured with 2 retries and a 30-second retry delay.
+The flow is registered with a `CronSchedule(cron="0 2 * * *")`.
