@@ -4,9 +4,9 @@ import sys
 from pyspark.sql import SparkSession
 
 from settings import Settings
-from ingest import run_ingest
+from pipeline.ingest import run_ingest
 from transform import run_transform
-from aggregate import run_aggregate
+from pipeline.aggregate import run_aggregate
 
 logging.basicConfig(
     level=logging.INFO,
