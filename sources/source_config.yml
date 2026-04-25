@@ -1,0 +1,32 @@
+source:
+  name: ddos_dataset
+  type: csv
+  origin: kaggle
+  dataset_url: https://www.kaggle.com/datasets/devendra416/ddos-datasets
+  local_path: data/raw/dataset.csv
+  encoding: utf-8
+  delimiter: ","
+  has_header: true
+
+schema:
+  label_column: Label
+  label_values:
+    - ddos
+    - Benign
+  drop_columns:
+    - Unnamed: 0
+    - Flow ID
+  key_columns:
+    - Src IP
+    - Dst Port
+    - Flow Duration
+    - Tot Fwd Pkts
+    - Tot Bwd Pkts
+
+ingestion:
+  sampling_ratio: 0.1
+  infer_schema: true
+  null_value: ""
+  inf_handling: replace_with_null
+  null_fill_strategy: column_mean
+  dedup: true
