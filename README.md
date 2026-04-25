@@ -1,86 +1,139 @@
 # DDoS Pipeline
 
-A distributed data processing pipeline built with Apache Spark that ingests, cleans, and aggregates network traffic data to identify DDoS attack patterns.
+Rozproszony pipeline do przetwarzania danych sieciowych zbudowany na Apache Spark,
+wykrywający wzorce ataków DDoS w ruchu sieciowym.
 
-The pipeline follows a **medallion architecture** (Bronze > Silver > Gold) and is fully orchestrated via Docker Compose.
-
----
-
-## Architecture shown in architecture.png
+Pipeline następuje architekturze **medallion** (Bronze → Silver → Gold)
+i jest orkiestrowany przez **Prefect** z automatycznym harmonogramem.
 
 ---
 
-## Project Structure
+## Architektura
+
+![Pipeline Architecture](architecture.png)
 
 ```
-project/
-├── main.py               # Single entry point - orchestrates all layers
-├── ingest.py             # Bronze: CSV > JSON
-├── transform.py          # Silver: cleaning and deduplication
-├── aggregate.py          # Gold: analytical aggregations
-├── settings.py           # All configuration in one place
-├── docker-compose.yml    # Spark cluster + pipeline runner
-└── data/
-    ├── raw/
-    │   └── dataset.csv   # Input file (not committed to Git)
-    ├── bronze/           # Raw data in JSON format
-    ├── silver/           # Cleaned data in JSON format
-    └── gold/             # Aggregated output tables
-        ├── top_source_ips/
-        ├── traffic_by_label/
-        ├── attack_rate_by_port/
-        └── flow_duration_stats/
+Źródło CSV  →  Bronze (JSON)  →  Silver (czyszczenie)  →  Gold (agregacje)
+                                                               ↑
+                                                         Prefect flow
+                                                      (schedule: cron 2:00)
 ```
 
 ---
 
-## Requirements
+## Struktura projektu
 
-- Docker
-- Docker Compose
-- The dataset CSV placed at `data/raw/dataset.csv`
-- Download dataset from > https://www.kaggle.com/datasets/devendra416/ddos-datasets?resource=download
+```
+BGD_03/
+├── schedule/
+│   └── ddos_dag.py           # Prefect flow - główny punkt wejścia orkiestratora
+├── pipeline/
+│   ├── main.py               # Bezpośrednie uruchomienie bez orkiestratora
+│   ├── ingest.py             # Bronze: CSV → JSON
+│   ├── transform.py          # Silver: czyszczenie i deduplikacja
+│   ├── aggregate.py          # Gold: tabele analityczne
+│   └── settings.py           # Cała konfiguracja w jednym miejscu
+├── sources/
+│   ├── source_config.yml     # Parametry źródła danych
+│   └── schema.md             # Opis schematu i warstw przetwarzania
+├── tech/
+│   └── docker-compose.yml    # Spark cluster + Prefect server + pipeline runner
+├── data/
+│   ├── raw/
+│   │   └── dataset.csv       # Plik wejściowy (nie commitowany do Git)
+│   ├── bronze/               # Surowe dane w formacie JSON
+│   ├── silver/               # Dane po czyszczeniu
+│   └── gold/                 # Tabele wynikowe
+│       ├── top_source_ips/
+│       ├── traffic_by_label/
+│       ├── attack_rate_by_port/
+│       └── flow_duration_stats/
+├── architecture.png
+├── requirements.txt
+└── README.md
+```
+
 ---
 
-## How to Run
+## Wymagania
+
+- Docker + Docker Compose
+- Plik datasetu CSV umieszczony w `data/raw/dataset.csv`
+- Dataset do pobrania: https://www.kaggle.com/datasets/devendra416/ddos-datasets
+
+---
+
+## Uruchomienie
+
+### Poprzez Prefect orkiestrator
 
 ```bash
-docker compose up pipeline
+docker compose -f tech/docker-compose.yml up
 ```
 
-This will:
-1. Start the Spark master
-2. Start the Spark worker (waits for master to be healthy)
-3. Run the pipeline (waits for worker to be healthy)
+Uruchamia:
+1. **Prefect server** - UI dostępne pod `http://localhost:4200`
+2. **Spark master** - UI pod `http://localhost:8080`
+3. **Spark worker** - czeka na zdrowy master
+4. **Pipeline runner** - wykonuje `schedule/ddos_dag.py`, czeka na oba powyższe
 
-Spark UI is available at `http://localhost:8080` while the cluster is running.
+Prefect automatycznie uruchamia pipeline codziennie o 2:00 (CronSchedule).
+Historia runów, logi i statusy są widoczne w Prefect UI.
 
-To run again (pipeline is idempotent > safe to re-run, overwrites previous output):
+### Bezpośrednio bez orkiestratora
 
 ```bash
-docker compose up pipeline
+cd pipeline
+python main.py
 ```
 
----
-
-## Gold Layer Outputs
-
-| Table | Description |
-|---|---|
-| `top_source_ips` | Top 20 source IPs by attack flow count |
-| `traffic_by_label` | Flow count and packet totals per label (ddos / Benign) |
-| `attack_rate_by_port` | Top 20 destination ports by attack-flow rate |
-| `flow_duration_stats` | Mean, min, max flow duration per label |
+Pipeline jest **idempotentny** - bezpieczne wielokrotne uruchamianie, poprzednie wyniki są nadpisywane.
 
 ---
 
-## Configuration
+## Warstwy przetwarzania
 
-All settings are in `settings.py`. Key values you may want to change:
+| Warstwa | Plik | Opis |
+|---------|------|------|
+| Bronze | `ingest.py` | Wczytanie CSV, usunięcie zbędnych kolumn (`Unnamed: 0`, `Flow ID`), zapis do JSON |
+| Silver | `transform.py` | Zamiana `±Infinity` na `null`, imputacja średnią kolumny, deduplikacja |
+| Gold | `aggregate.py` | 4 tabele analityczne (patrz niżej) |
 
-| Setting | Default | Description |
-|---|---|---|
-| `input_file` | `data/raw/dataset.csv` | Path to source CSV |
-| `label_attack` | `ddos` | Attack label value in the dataset |
-| `label_benign` | `Benign` | Benign label value in the dataset |
-| `spark_shuffle_partitions` | `8` | Tune based on dataset size and available cores |
+### Tabele Gold
+
+| Tabela | Opis |
+|--------|------|
+| `top_source_ips` | Top 20 adresów IP źródłowych według liczby przepływów ataku |
+| `traffic_by_label` | Liczba przepływów i pakietów dla każdej klasy (ddos / Benign) |
+| `attack_rate_by_port` | Top 20 portów docelowych według wskaźnika ataków |
+| `flow_duration_stats` | Średni, minimalny i maksymalny czas trwania przepływu per klasa |
+
+---
+
+## Konfiguracja
+
+Wszystkie ustawienia w `pipeline/settings.py`. Parametry źródła danych opisane w `sources/source_config.yml`.
+
+| Parametr | Domyślnie | Opis |
+|----------|-----------|------|
+| `input_file` | `data/raw/dataset.csv` | Ścieżka do pliku CSV |
+| `label_attack` | `ddos` | Wartość etykiety ataku w datasecie |
+| `label_benign` | `Benign` | Wartość etykiety ruchu normalnego |
+| `spark_shuffle_partitions` | `8` | Dostosuj do rozmiaru danych i liczby rdzeni |
+| `spark_app_name` | `ddos_pipeline` | Nazwa aplikacji Spark (widoczna w UI) |
+
+---
+
+## Orkiestracja (Prefect)
+
+`schedule/ddos_dag.py` definiuje flow Prefect składający się z trzech tasków:
+
+```
+ddos_pipeline_flow
+├── task_ingest      (Bronze, retries=2)
+├── task_transform   (Silver, retries=2)
+└── task_aggregate   (Gold,   retries=2)
+```
+
+Każdy task ma skonfigurowane 2 retry z 30-sekundowym opóźnieniem.
+Flow jest zarejestrowany z harmonogramem `CronSchedule(cron="0 2 * * *")`.

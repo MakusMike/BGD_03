@@ -1,5 +1,5 @@
 from prefect import flow, task, get_run_logger
-from prefect.orion.schemas.schedules import CronSchedule
+from prefect.client.schemas.schedules import CronSchedule
 from pyspark.sql import SparkSession
 import sys
 import os
@@ -53,11 +53,6 @@ def task_aggregate(spark: SparkSession, settings: Settings) -> None:
     log_prints=True,
 )
 def ddos_pipeline_flow() -> None:
-    """
-    Główny flow orkiestrujący pipeline DDoS.
-    Uruchamia etapy sekwencyjnie: ingest → transform → aggregate.
-    Każdy etap ma retry w razie tymczasowych błędów.
-    """
     settings = Settings()
     settings.ensure_dirs()
 
