@@ -8,6 +8,13 @@ source:
   delimiter: ","
   has_header: true
 
+kafka:
+  bootstrap_servers: kafka:9092
+  topic: ddos-raw
+  partitions: 4
+  replication_factor: 1
+  producer_delay_ms: 0
+
 schema:
   label_column: Label
   label_values:
@@ -24,9 +31,9 @@ schema:
     - Tot Bwd Pkts
 
 ingestion:
-  sampling_ratio: 0.1
-  infer_schema: true
+  infer_schema: false
   null_value: ""
   inf_handling: replace_with_null
   null_fill_strategy: column_mean
   dedup: true
+  checkpoint_path: data/checkpoints/bronze

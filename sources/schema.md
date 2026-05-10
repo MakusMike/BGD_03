@@ -1,32 +1,36 @@
-# Źródło danych: DDoS Network Traffic Dataset
+# Data source: DDoS Network Traffic Dataset
 
-## Pochodzenie
-- **Źródło:** Kaggle - devendra416/ddos-datasets
-- **Format:** CSV, separator `,`, nagłówek w pierwszym wierszu
-- **Rozmiar:** ~170 MB, ~225 tys. wierszy
-- **Klasy:** `ddos` (atak) / `Benign` (ruch normalny)
+## Origin
 
-## Kluczowe kolumny
+- **Source:** Kaggle - devendra416/ddos-datasets
+- **Format:** CSV, delimiter `,`, header in first row
+- **Size:** ~170 MB, ~225 000 rows
+- **Classes:** `ddos` (attack traffic) / `Benign` (normal traffic)
+- **Ingestion:** rows published to Kafka topic `ddos-raw` by `sources/producer.py`
 
-| Kolumna          | Typ     | Opis                            |
-|------------------|---------|---------------------------------|
-| Label            | string  | Klasa przepływu: ddos / Benign  |
-| Src IP           | string  | Adres IP źródłowy               |
-| Dst Port         | int     | Port docelowy                   |
-| Flow Duration    | long    | Czas trwania przepływu (µs)     |
-| Tot Fwd Pkts     | int     | Łączna liczba pakietów forward  |
-| Tot Bwd Pkts     | int     | Łączna liczba pakietów backward |
-| Flow ID          | string  | Usuwana - unikalne ID przepływu |
-| Unnamed: 0       | int     | Usuwana - artefakt eksportu CSV |
+## Key columns
 
-## Warstwy przetwarzania
+| Column | Type | Description                                                            |
+|---|---|------------------------------------------------------------------------|
+| Label | string | Flow class: `ddos` / `Benign`                                          |
+| Src IP | string | Source IP address                                                      |
+| Dst Port | int | Destination port                                                       |
+| Flow Duration | long | Flow duration in microseconds                                          |
+| Tot Fwd Pkts | int | Total forward packets                                                  |
+| Tot Bwd Pkts | int | Total backward packets                                                 |
+| Flow ID | string | Dropped - unique flow identifier (no analytical value)                 |
+| Unnamed: 0 | int | Dropped - CSV export artefact from `df.to_csv()` without `index=False` |
 
-| Warstwa | Opis                                                  |
-|---------|-------------------------------------------------------|
-| Bronze  | CSV > JSON, usunięcie zbędnych kolumn                 |
-| Silver  | Zamiana ±inf na null, imputacja średnią, deduplikacja |
-| Gold    | 4 tabele analityczne (top IPs, porty, statystyki)     |
+## Processing layers
 
-## Znane problemy z danymi
-- Kolumny float/double mogą zawierać wartości `Infinity` - obsługiwane w Silver
-- `Unnamed: 0` to artefakt `df.to_csv()` bez `index=False` - usuwana w Bronze
+| Layer | Description |
+|---|---|
+| Bronze | Kafka stream → JSON, drop unused columns |
+| Silver | Replace `±Infinity` with `null`, impute column means, deduplicate |
+| Gold | 4 analytical tables: top IPs, port attack rates, traffic by label, duration stats |
+
+## Known data quality issues
+
+- Float/double columns may contain `Infinity` values - handled in Silver by replacing with `null` and imputing the column mean.
+- `Unnamed: 0` is a CSV export artefact - dropped in Bronze.
+- All values arrive as strings from Kafka (JSON serialised by the producer) - type casting happens in Silver.

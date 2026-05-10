@@ -21,10 +21,9 @@ def _write_gold(df: DataFrame, table_name: str, settings: Settings) -> None:
 
 
 def _top_source_ips(df: DataFrame, settings: Settings) -> DataFrame:
-    """Top 20 source IPs by attack flow count."""
     return (
         df.filter(F.col(settings.label_column) == settings.label_attack)
-        .groupBy(settings.src_ip_column)
+        .groupBy(F.col(settings.src_ip_column).alias("src_ip"))
         .agg(F.count("*").alias("attack_count"))
         .orderBy(F.desc("attack_count"))
         .limit(20)
@@ -32,22 +31,20 @@ def _top_source_ips(df: DataFrame, settings: Settings) -> DataFrame:
 
 
 def _traffic_by_label(df: DataFrame, settings: Settings) -> DataFrame:
-    """Total flows, forward packets, and backward packets per label."""
     return (
-        df.groupBy(settings.label_column)
+        df.groupBy(F.col(settings.label_column).alias("label"))
         .agg(
             F.count("*").alias("total_flows"),
-            F.sum(settings.fwd_pkts_column).alias("total_fwd_packets"),
-            F.sum(settings.bwd_pkts_column).alias("total_bwd_packets"),
+            F.sum(F.col(settings.fwd_pkts_column)).alias("total_fwd_packets"),
+            F.sum(F.col(settings.bwd_pkts_column)).alias("total_bwd_packets"),
         )
-        .orderBy(settings.label_column)
+        .orderBy("label")
     )
 
 
 def _attack_rate_by_port(df: DataFrame, settings: Settings) -> DataFrame:
-    """Top 20 destination ports ranked by attack-flow rate."""
     return (
-        df.groupBy(settings.dst_port_column)
+        df.groupBy(F.col(settings.dst_port_column).alias("dst_port"))
         .agg(
             F.count("*").alias("total_flows"),
             F.sum(
@@ -64,13 +61,12 @@ def _attack_rate_by_port(df: DataFrame, settings: Settings) -> DataFrame:
 
 
 def _flow_duration_stats(df: DataFrame, settings: Settings) -> DataFrame:
-    """Mean / min / max flow duration per label."""
     return (
-        df.groupBy(settings.label_column)
+        df.groupBy(F.col(settings.label_column).alias("label"))
         .agg(
-            F.round(F.mean(settings.flow_duration_column), 2).alias("mean_duration"),
-            F.min(settings.flow_duration_column).alias("min_duration"),
-            F.max(settings.flow_duration_column).alias("max_duration"),
+            F.round(F.mean(F.col(settings.flow_duration_column)), 2).alias("mean_duration_us"),
+            F.min(F.col(settings.flow_duration_column)).alias("min_duration_us"),
+            F.max(F.col(settings.flow_duration_column)).alias("max_duration_us"),
         )
     )
 

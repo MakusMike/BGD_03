@@ -4,9 +4,9 @@ import sys
 from pyspark.sql import SparkSession
 
 from settings import Settings
-from pipeline.ingest import run_ingest
+from ingest import run_ingest
 from transform import run_transform
-from pipeline.aggregate import run_aggregate
+from aggregate import run_aggregate
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +22,7 @@ def build_spark(settings: Settings) -> SparkSession:
         .appName(settings.spark_app_name)
         .config("spark.sql.shuffle.partitions", str(settings.spark_shuffle_partitions))
         .config("spark.sql.adaptive.enabled", "true")
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0")
         .getOrCreate()
     )
 
