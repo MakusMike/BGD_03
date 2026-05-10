@@ -1,4 +1,4 @@
-pyspark==4.1.1
+pyspark==3.5.3
 delta-spark==4.2.0
 pyspark-stubs
 prefect==3.6.28

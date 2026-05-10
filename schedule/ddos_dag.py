@@ -3,7 +3,6 @@ import os
 import sys
 
 from prefect import flow, task, get_run_logger
-from prefect.cache_policies import NO_CACHE
 from pyspark.sql import SparkSession
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "pipeline"))
@@ -23,12 +22,12 @@ def build_spark(settings: Settings) -> SparkSession:
         .config("spark.executor.memory", "1g")
         .config("spark.sql.shuffle.partitions", str(settings.spark_shuffle_partitions))
         .config("spark.sql.adaptive.enabled", "true")
-        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.0")
+        .config("spark.jars.packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.3")
         .getOrCreate()
     )
 
 
-@task(name="bronze-ingest", retries=2, retry_delay_seconds=30, cache_policy=NO_CACHE)
+@task(name="bronze-ingest", retries=2, retry_delay_seconds=30)
 def task_ingest(spark: SparkSession, settings: Settings) -> None:
     logger = get_run_logger()
     logger.info("Starting bronze layer: ingest from Kafka topic '%s'", settings.kafka_topic)
@@ -36,7 +35,7 @@ def task_ingest(spark: SparkSession, settings: Settings) -> None:
     logger.info("Bronze layer complete")
 
 
-@task(name="silver-transform", retries=2, retry_delay_seconds=30, cache_policy=NO_CACHE)
+@task(name="silver-transform", retries=2, retry_delay_seconds=30)
 def task_transform(spark: SparkSession, settings: Settings) -> None:
     logger = get_run_logger()
     logger.info("Starting silver layer: transform")
@@ -44,7 +43,7 @@ def task_transform(spark: SparkSession, settings: Settings) -> None:
     logger.info("Silver layer complete")
 
 
-@task(name="gold-aggregate", retries=2, retry_delay_seconds=30, cache_policy=NO_CACHE)
+@task(name="gold-aggregate", retries=2, retry_delay_seconds=30)
 def task_aggregate(spark: SparkSession, settings: Settings) -> None:
     logger = get_run_logger()
     logger.info("Starting gold layer: aggregate")

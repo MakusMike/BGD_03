@@ -87,7 +87,7 @@ services:
       start_period: 40s
 
   spark-master:
-    image: apache/spark:4.1.0
+    image: apache/spark:3.5.3
     container_name: spark-master
     entrypoint: ["/opt/spark/bin/spark-class", "org.apache.spark.deploy.master.Master"]
     ports:
@@ -103,8 +103,9 @@ services:
     restart: unless-stopped
 
   spark-worker:
-    image: apache/spark:4.1.0
+    image: apache/spark:3.5.3
     container_name: spark-worker
+    user: root
     entrypoint:
       - /opt/spark/bin/spark-class
       - org.apache.spark.deploy.worker.Worker
@@ -120,20 +121,20 @@ services:
       spark-master:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8081" ]
       interval: 5s
       timeout: 5s
       retries: 15
     restart: unless-stopped
 
   pipeline-runner:
-    image: apache/spark:4.1.0
+    image: apache/spark:3.5.3
     container_name: pipeline-runner
     user: root
     working_dir: /opt/pipeline
     entrypoint: [ "/bin/bash", "-c" ]
     command: >-
-      "pip install prefect==3.4.0 pyspark==4.1.1 kafka-python==2.0.2 pyyaml --quiet --no-cache-dir &&
+      "pip install prefect==2.20.25 pyspark==3.5.3 kafka-python==2.0.2 pyyaml --quiet --no-cache-dir &&
        python3 schedule/ddos_dag.py"
     environment:
       PREFECT_API_URL: http://prefect-server:4200/api
@@ -143,7 +144,6 @@ services:
       HOME: /root
       JAVA_TOOL_OPTIONS: "-Xmx512m"
     mem_limit: 3g
-    mem_reservation: 1g
     volumes:
       - ..:/opt/pipeline
     depends_on:
